@@ -14,15 +14,20 @@ A fast, cross-platform CLI tool that parses JaCoCo XML coverage reports, filters
 
 ## Quick Start
 
-### 1. Build
+### 1. Install
 
 ```bash
 git clone <repo-url>
 cd jacoco-filter
-cargo build --release
+cargo install --path .
 ```
 
-The binary will be at `target/release/jacoco-filter`.
+The `jacoco-filter` binary will be installed to `~/.cargo/bin/` and available on your `PATH`. Alternatively, build without installing:
+
+```bash
+cargo build --release
+# Binary at target/release/jacoco-filter
+```
 
 ### 2. Generate a JaCoCo report
 
