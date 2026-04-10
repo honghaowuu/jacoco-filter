@@ -44,6 +44,7 @@ src/
    - Missed lines = lines where `mi > 0` or `mb > 0`
 4. Apply `--min-score` threshold
 5. Serialize to JSON array (compact by default, pretty with `--pretty`)
+6. Optionally include a line-coverage summary with `--summary`
 
 ### XML structure to parse
 
@@ -55,6 +56,8 @@ src/
 **Important:** Line-level detail (`<line>` elements) is under `<sourcefile>`, not under `<method>`. You must correlate `<sourcefile>` lines with method line ranges to assign missed lines to the correct method.
 
 ### Output JSON shape
+
+Default (methods array):
 
 ```json
 [
@@ -68,6 +71,24 @@ src/
 ]
 ```
 
+With `--summary` (Report wrapper):
+
+```json
+{
+  "summary": {
+    "line_coverage_pct": 72.4,
+    "lines_covered": 842,
+    "lines_missed": 321,
+    "by_class": [
+      { "class": "...", "source_file": "...", "line_coverage_pct": 45.0, "lines_covered": 9, "lines_missed": 11 }
+    ]
+  },
+  "methods": [ ... ]
+}
+```
+
+`by_class` is sorted ascending by `line_coverage_pct` (worst first).
+
 ## Suggested Dependencies (Cargo.toml)
 
 - `quick-xml` — fast XML streaming parser
@@ -77,5 +98,5 @@ src/
 ## CLI Interface
 
 ```bash
-jacoco-filter <input_file> [--output <path>] [--min-score <float>] [--pretty]
+jacoco-filter <input_file> [--output <path>] [--min-score <float>] [--pretty] [--summary]
 ```

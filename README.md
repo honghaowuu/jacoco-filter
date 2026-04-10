@@ -7,6 +7,7 @@ A fast, cross-platform CLI tool that parses JaCoCo XML coverage reports, filters
 - Filters constructors, getters, and setters automatically
 - Skips fully-covered methods (no missed lines)
 - Scores each method: `complexity × (missed_lines / total_lines)`
+- Reports overall and per-class line coverage percentage (`--summary`)
 - Outputs compact or pretty-printed JSON
 - Supports a minimum score threshold to focus on high-priority gaps
 - Single static binary — no runtime dependencies
@@ -33,14 +34,17 @@ mvn clean test jacoco:report
 ### 3. Run the filter
 
 ```bash
-# Print to stdout (compact JSON)
+# Print to stdout (compact JSON — methods array)
 jacoco-filter target/site/jacoco/jacoco.xml
 
-# Pretty-print and save to a file
-jacoco-filter target/site/jacoco/jacoco.xml --pretty --output coverage-gaps.json
+# Include overall line coverage summary
+jacoco-filter target/site/jacoco/jacoco.xml --summary --pretty
 
 # Only show methods with a score above 1.5
 jacoco-filter target/site/jacoco/jacoco.xml --min-score 1.5 --pretty
+
+# Pretty-print and save to a file
+jacoco-filter target/site/jacoco/jacoco.xml --summary --pretty --output coverage-gaps.json
 ```
 
 ### 4. Install the Claude Code skill (optional)
@@ -63,7 +67,9 @@ claude "Here are the highest-priority coverage gaps. Please write tests for thes
 
 ## Output Format
 
-Results are sorted by score descending. Each entry contains:
+### Default — methods array
+
+Results are sorted by score descending:
 
 ```json
 [
@@ -85,6 +91,43 @@ Results are sorted by score descending. Each entry contains:
 | `score` | `complexity × (missed / total)` — higher means more urgent |
 | `missed_lines` | Line numbers with no coverage (`mi > 0` or `mb > 0`) |
 
+### With `--summary`
+
+Wraps the methods array in an object with a coverage summary:
+
+```json
+{
+  "summary": {
+    "line_coverage_pct": 72.4,
+    "lines_covered": 842,
+    "lines_missed": 321,
+    "by_class": [
+      {
+        "class": "com.example.billing.InvoiceService",
+        "source_file": "InvoiceService.java",
+        "line_coverage_pct": 45.0,
+        "lines_covered": 9,
+        "lines_missed": 11
+      }
+    ]
+  },
+  "methods": [ ... ]
+}
+```
+
+`by_class` is sorted ascending by `line_coverage_pct` (worst-covered first). Use `jq` to pull out just the number you need:
+
+```bash
+# Overall coverage percentage
+jacoco-filter jacoco.xml --summary | jq '.summary.line_coverage_pct'
+
+# Pass/fail against an 80% target
+jacoco-filter jacoco.xml --summary | jq 'if .summary.line_coverage_pct >= 80 then "PASS" else "FAIL" end'
+
+# Five worst-covered classes
+jacoco-filter jacoco.xml --summary | jq '.summary.by_class[:5] | [.[] | {class, line_coverage_pct}]'
+```
+
 ## CLI Reference
 
 ```
@@ -97,6 +140,7 @@ Options:
   --output <path>       Write JSON to file (default: stdout)
   --min-score <float>   Exclude methods below this score (default: 0.0)
   --pretty              Pretty-print JSON output
+  --summary             Include line-coverage summary in output
   -h, --help            Print help
   -V, --version         Print version
 ```

@@ -17,6 +17,9 @@ pub struct ParsedClass {
     pub class_name: String,
     pub source_file: String,
     pub methods: Vec<ParsedMethod>,
+    /// Class-level LINE counter (mirrors what JaCoCo aggregates to bundle level).
+    pub line_missed: u32,
+    pub line_covered: u32,
 }
 
 /// Final output entry per method.
@@ -27,4 +30,30 @@ pub struct FilteredMethod {
     pub method: String,
     pub score: f64,
     pub missed_lines: Vec<u32>,
+}
+
+/// Per-class line coverage stats.
+#[derive(Serialize)]
+pub struct ClassCoverage {
+    pub class: String,
+    pub source_file: String,
+    pub line_coverage_pct: f64,
+    pub lines_covered: u32,
+    pub lines_missed: u32,
+}
+
+/// Aggregate line coverage summary for the whole report.
+#[derive(Serialize)]
+pub struct CoverageSummary {
+    pub line_coverage_pct: f64,
+    pub lines_covered: u32,
+    pub lines_missed: u32,
+    pub by_class: Vec<ClassCoverage>,
+}
+
+/// Full report output (used with --summary flag).
+#[derive(Serialize)]
+pub struct Report {
+    pub summary: CoverageSummary,
+    pub methods: Vec<FilteredMethod>,
 }

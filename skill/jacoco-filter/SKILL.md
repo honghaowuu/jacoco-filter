@@ -19,7 +19,12 @@ description: |
 
 ## What jacoco-filter Does
 
-`jacoco-filter` parses a JaCoCo XML coverage report and outputs a prioritized JSON array of methods that need tests. It:
+`jacoco-filter` parses a JaCoCo XML coverage report and outputs either:
+
+- A **prioritized JSON array** of methods that need tests (default), or
+- A **full report** with a line-coverage summary + methods (with `--summary`)
+
+It:
 
 1. Skips trivial methods (constructors, getters, setters, fully-covered methods)
 2. Scores each remaining method: `complexity × (missed_lines / total_lines)`
@@ -44,19 +49,24 @@ find . -name "jacoco.xml" -path "*/reports/jacoco/*"
 ## Run jacoco-filter
 
 ```bash
-# Basic
+# Basic (methods array only)
 jacoco-filter path/to/jacoco.xml
+
+# With line-coverage summary (overall % + per-class breakdown)
+jacoco-filter path/to/jacoco.xml --summary
 
 # Filter to high-priority methods only
 jacoco-filter path/to/jacoco.xml --min-score 2.0
 
 # Save output
-jacoco-filter path/to/jacoco.xml --output gaps.json
+jacoco-filter path/to/jacoco.xml --summary --output gaps.json
 ```
 
 ---
 
 ## Output Format
+
+**Default** — plain array, sorted by score descending:
 
 ```json
 [
@@ -70,9 +80,31 @@ jacoco-filter path/to/jacoco.xml --output gaps.json
 ]
 ```
 
+**With `--summary`** — object with coverage summary + methods:
+
+```json
+{
+  "summary": {
+    "line_coverage_pct": 72.4,
+    "lines_covered": 842,
+    "lines_missed": 321,
+    "by_class": [
+      {
+        "class": "com.example.ClassName",
+        "source_file": "ClassName.java",
+        "line_coverage_pct": 45.0,
+        "lines_covered": 9,
+        "lines_missed": 11
+      }
+    ]
+  },
+  "methods": [ ... ]
+}
+```
+
 - **score** — `complexity × (missed_lines / total_lines)`. Higher = write tests here first.
 - **missed_lines** — exact line numbers with no coverage. Target these in your tests.
-- Sorted descending by score.
+- **by_class** — sorted ascending by `line_coverage_pct` (worst-covered classes first).
 
 ---
 
@@ -84,10 +116,10 @@ jacoco-filter path/to/jacoco.xml --output gaps.json
 mvn test        # or: gradle test
 ```
 
-### Step 2: Run jacoco-filter
+### Step 2: Check overall coverage and get gaps
 
 ```bash
-jacoco-filter target/site/jacoco/jacoco.xml --min-score 1.0
+jacoco-filter target/site/jacoco/jacoco.xml --summary --min-score 1.0
 ```
 
 ### Step 3: Find and read the source
@@ -108,18 +140,36 @@ Write tests that exercise the missed lines. Work top-down by score.
 
 ```bash
 mvn test
-jacoco-filter target/site/jacoco/jacoco.xml --min-score 1.0
+jacoco-filter target/site/jacoco/jacoco.xml --summary --min-score 1.0
 ```
 
-Confirm scores dropped for the methods you covered.
+Confirm overall `line_coverage_pct` increased and scores dropped for covered methods.
 
 ---
 
 ## Process output with jq
 
+### Check overall line coverage (one number)
+
 ```bash
-# Top 10 by score
-jacoco-filter jacoco.xml | jq 'sort_by(-.score) | .[0:10]'
+# Overall line coverage percentage — use this to check if the target is met
+jacoco-filter jacoco.xml --summary | jq '.summary.line_coverage_pct'
+
+# Check against a threshold (exits 0 if met, 1 if not)
+jacoco-filter jacoco.xml --summary | jq 'if .summary.line_coverage_pct >= 80 then "PASS" else "FAIL" end'
+
+# Worst-covered classes (already sorted ascending in output)
+jacoco-filter jacoco.xml --summary | jq '.summary.by_class | .[0:5] | [.[] | {class, line_coverage_pct}]'
+```
+
+### Work with the methods array
+
+```bash
+# Top 10 by score (default output)
+jacoco-filter jacoco.xml | jq '.[0:10]'
+
+# Top 10 by score from summary output
+jacoco-filter jacoco.xml --summary | jq '.methods[0:10]'
 
 # Methods in a specific class
 jacoco-filter jacoco.xml | jq '[.[] | select(.class | contains("PaymentService"))]'

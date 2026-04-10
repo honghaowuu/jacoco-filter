@@ -20,6 +20,10 @@ struct Cli {
     /// Pretty-print JSON output
     #[arg(long)]
     pretty: bool,
+
+    /// Include a line-coverage summary alongside the filtered methods
+    #[arg(long)]
+    summary: bool,
 }
 
 fn main() {
@@ -33,18 +37,32 @@ fn main() {
         }
     };
 
-    let methods = match jacoco_filter::process(&xml, cli.min_score) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("Error processing XML: {}", e);
-            std::process::exit(1);
+    let json = if cli.summary {
+        let report = match jacoco_filter::process_with_summary(&xml, cli.min_score) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Error processing XML: {}", e);
+                std::process::exit(1);
+            }
+        };
+        if cli.pretty {
+            serde_json::to_string_pretty(&report)
+        } else {
+            serde_json::to_string(&report)
         }
-    };
-
-    let json = if cli.pretty {
-        serde_json::to_string_pretty(&methods)
     } else {
-        serde_json::to_string(&methods)
+        let methods = match jacoco_filter::process(&xml, cli.min_score) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("Error processing XML: {}", e);
+                std::process::exit(1);
+            }
+        };
+        if cli.pretty {
+            serde_json::to_string_pretty(&methods)
+        } else {
+            serde_json::to_string(&methods)
+        }
     };
 
     let json = match json {

@@ -53,14 +53,16 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
 
     let mut result: Vec<ParsedClass> = Vec::new();
 
-    // Per-package accumulators
-    let mut pkg_classes: Vec<(String, String, Vec<ParsedMethod>)> = Vec::new();
+    // Per-package accumulators: (class_name, source_file, methods, line_missed, line_covered)
+    let mut pkg_classes: Vec<(String, String, Vec<ParsedMethod>, u32, u32)> = Vec::new();
     let mut sf_lines: HashMap<String, Vec<LineDatum>> = HashMap::new();
 
     // Current class
     let mut cur_class_name: Option<String> = None;
     let mut cur_source_file: Option<String> = None;
     let mut cur_methods: Vec<ParsedMethod> = Vec::new();
+    let mut cur_class_line_missed: u32 = 0;
+    let mut cur_class_line_covered: u32 = 0;
 
     // Current method
     let mut cur_method: Option<MethodBuilder> = None;
@@ -75,13 +77,16 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
 
     loop {
         match reader.read_event_into(&mut buf)? {
-            Event::Start(ref e) | Event::Empty(ref e) => {
+            // Non-empty opening tags: set state, expect a matching End event.
+            Event::Start(ref e) => {
                 match e.name().as_ref() {
                     b"class" => {
                         cur_class_name =
                             get_attr(e, b"name").map(|n| n.replace('/', "."));
                         cur_source_file = get_attr(e, b"sourcefilename");
                         cur_methods = Vec::new();
+                        cur_class_line_missed = 0;
+                        cur_class_line_covered = 0;
                     }
                     b"method" if cur_class_name.is_some() && !in_sourcefile => {
                         let name = get_attr(e, b"name").unwrap_or_default();
@@ -94,6 +99,26 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
                             complexity: 0,
                         });
                         in_method = true;
+                    }
+                    b"sourcefile" => {
+                        cur_sf_name = get_attr(e, b"name");
+                        cur_sf_lines = Vec::new();
+                        in_sourcefile = true;
+                    }
+                    _ => {}
+                }
+            }
+            // Self-closing tags: process fully in place, no End event follows.
+            Event::Empty(ref e) => {
+                match e.name().as_ref() {
+                    b"class" => {
+                        // Self-closing class (e.g. interface with no body) — record
+                        // it with zero line counters.
+                        let class_name = get_attr(e, b"name").map(|n| n.replace('/', "."));
+                        let sf = get_attr(e, b"sourcefilename");
+                        if let (Some(cn), Some(s)) = (class_name, sf) {
+                            pkg_classes.push((cn, s, Vec::new(), 0, 0));
+                        }
                     }
                     b"counter" if in_method => {
                         if let Some(ref mut m) = cur_method {
@@ -112,10 +137,22 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
                             }
                         }
                     }
+                    // Class-level LINE counter (outside any method, not in sourcefile).
+                    // This is what JaCoCo aggregates up to the bundle level, so it
+                    // matches what the Maven JaCoCo plugin reports.
+                    b"counter" if cur_class_name.is_some() && !in_sourcefile => {
+                        if get_attr(e, b"type").as_deref() == Some("LINE") {
+                            cur_class_line_missed = parse_u32(e, b"missed");
+                            cur_class_line_covered = parse_u32(e, b"covered");
+                        }
+                    }
                     b"sourcefile" => {
-                        cur_sf_name = get_attr(e, b"name");
-                        cur_sf_lines = Vec::new();
-                        in_sourcefile = true;
+                        // Self-closing sourcefile has no <line> children; just record
+                        // it as an empty entry so the lookup still works.
+                        if let Some(name) = get_attr(e, b"name") {
+                            sf_lines.entry(name).or_default();
+                        }
+                        // Do NOT set in_sourcefile — there is no closing tag to reset it.
                     }
                     b"line" if in_sourcefile => {
                         let nr = parse_u32(e, b"nr");
@@ -149,6 +186,8 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
                                 class_name,
                                 sf,
                                 std::mem::take(&mut cur_methods),
+                                cur_class_line_missed,
+                                cur_class_line_covered,
                             ));
                         }
                     }
@@ -160,7 +199,7 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
                     }
                     b"package" => {
                         // Correlate sourcefile lines to class methods
-                        for (class_name, sf, methods) in pkg_classes.drain(..) {
+                        for (class_name, sf, methods, line_missed, line_covered) in pkg_classes.drain(..) {
                             let methods_with_lines = if let Some(lines) = sf_lines.get(&sf) {
                                 assign_lines(methods, lines)
                             } else {
@@ -170,6 +209,8 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
                                 class_name,
                                 source_file: sf,
                                 methods: methods_with_lines,
+                                line_missed,
+                                line_covered,
                             });
                         }
                         sf_lines.clear();
@@ -185,7 +226,7 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
 
     // Handle any remaining package data (e.g. no closing <package> tag)
     if !pkg_classes.is_empty() {
-        for (class_name, sf, methods) in pkg_classes.drain(..) {
+        for (class_name, sf, methods, line_missed, line_covered) in pkg_classes.drain(..) {
             let methods_with_lines = if let Some(lines) = sf_lines.get(&sf) {
                 assign_lines(methods, lines)
             } else {
@@ -195,6 +236,8 @@ pub fn parse(xml: &str) -> Result<Vec<ParsedClass>, Box<dyn std::error::Error>> 
                 class_name,
                 source_file: sf,
                 methods: methods_with_lines,
+                line_missed,
+                line_covered,
             });
         }
     }
