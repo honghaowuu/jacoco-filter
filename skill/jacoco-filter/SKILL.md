@@ -49,7 +49,7 @@ find . -name "jacoco.xml" -path "*/reports/jacoco/*"
 ## Run jacoco-filter
 
 ```bash
-# Basic (methods array only)
+# Basic (methods array only, top 5 by default)
 jacoco-filter path/to/jacoco.xml
 
 # With line-coverage summary (overall % + per-class breakdown)
@@ -57,6 +57,10 @@ jacoco-filter path/to/jacoco.xml --summary
 
 # Filter to high-priority methods only
 jacoco-filter path/to/jacoco.xml --min-score 2.0
+
+# Show more results (or all with 0)
+jacoco-filter path/to/jacoco.xml --top-k 10
+jacoco-filter path/to/jacoco.xml --top-k 0
 
 # Save output
 jacoco-filter path/to/jacoco.xml --summary --output gaps.json
@@ -165,11 +169,13 @@ jacoco-filter jacoco.xml --summary | jq '.summary.by_class | .[0:5] | [.[] | {cl
 ### Work with the methods array
 
 ```bash
-# Top 10 by score (default output)
-jacoco-filter jacoco.xml | jq '.[0:10]'
+# Top 10 by score (pass --top-k 10, or use --top-k 0 and slice with jq)
+jacoco-filter jacoco.xml --top-k 10
+jacoco-filter jacoco.xml --top-k 0 | jq '.[0:10]'
 
 # Top 10 by score from summary output
-jacoco-filter jacoco.xml --summary | jq '.methods[0:10]'
+jacoco-filter jacoco.xml --summary --top-k 10
+jacoco-filter jacoco.xml --summary --top-k 0 | jq '.methods[0:10]'
 
 # Methods in a specific class
 jacoco-filter jacoco.xml | jq '[.[] | select(.class | contains("PaymentService"))]'
