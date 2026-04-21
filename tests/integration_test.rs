@@ -118,3 +118,58 @@ fn test_filter_unit() {
     assert!(!is_trivial("calculate"));
     assert!(!is_trivial("resourceType"));
 }
+
+use std::process::Command;
+
+fn sample_xml_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/sample.xml")
+}
+
+#[test]
+fn test_top_k_limits_output() {
+    let output = Command::new(env!("CARGO_BIN_EXE_jacoco-filter"))
+        .args([sample_xml_path().to_str().unwrap(), "--top-k", "2"])
+        .output()
+        .expect("failed to run binary");
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("invalid JSON");
+    assert_eq!(json.as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn test_top_k_zero_returns_all() {
+    let output = Command::new(env!("CARGO_BIN_EXE_jacoco-filter"))
+        .args([sample_xml_path().to_str().unwrap(), "--top-k", "0"])
+        .output()
+        .expect("failed to run binary");
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("invalid JSON");
+    assert_eq!(json.as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn test_top_k_larger_than_results_returns_all() {
+    let output = Command::new(env!("CARGO_BIN_EXE_jacoco-filter"))
+        .args([sample_xml_path().to_str().unwrap(), "--top-k", "100"])
+        .output()
+        .expect("failed to run binary");
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("invalid JSON");
+    assert_eq!(json.as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn test_top_k_with_summary() {
+    let output = Command::new(env!("CARGO_BIN_EXE_jacoco-filter"))
+        .args([sample_xml_path().to_str().unwrap(), "--top-k", "1", "--summary"])
+        .output()
+        .expect("failed to run binary");
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("invalid JSON");
+    assert_eq!(json["methods"].as_array().unwrap().len(), 1);
+}

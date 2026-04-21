@@ -24,6 +24,10 @@ struct Cli {
     /// Include a line-coverage summary alongside the filtered methods
     #[arg(long)]
     summary: bool,
+
+    /// Limit output to the top-k highest-scoring methods (0 = no limit)
+    #[arg(long, default_value = "5")]
+    top_k: usize,
 }
 
 fn main() {
@@ -38,26 +42,32 @@ fn main() {
     };
 
     let json = if cli.summary {
-        let report = match jacoco_filter::process_with_summary(&xml, cli.min_score) {
+        let mut report = match jacoco_filter::process_with_summary(&xml, cli.min_score) {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("Error processing XML: {}", e);
                 std::process::exit(1);
             }
         };
+        if cli.top_k > 0 {
+            report.methods.truncate(cli.top_k);
+        }
         if cli.pretty {
             serde_json::to_string_pretty(&report)
         } else {
             serde_json::to_string(&report)
         }
     } else {
-        let methods = match jacoco_filter::process(&xml, cli.min_score) {
+        let mut methods = match jacoco_filter::process(&xml, cli.min_score) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("Error processing XML: {}", e);
                 std::process::exit(1);
             }
         };
+        if cli.top_k > 0 {
+            methods.truncate(cli.top_k);
+        }
         if cli.pretty {
             serde_json::to_string_pretty(&methods)
         } else {
