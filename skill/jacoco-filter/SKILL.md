@@ -91,16 +91,7 @@ jacoco-filter path/to/jacoco.xml --summary --output gaps.json
   "summary": {
     "line_coverage_pct": 72.4,
     "lines_covered": 842,
-    "lines_missed": 321,
-    "by_class": [
-      {
-        "class": "com.example.ClassName",
-        "source_file": "ClassName.java",
-        "line_coverage_pct": 45.0,
-        "lines_covered": 9,
-        "lines_missed": 11
-      }
-    ]
+    "lines_missed": 321
   },
   "methods": [ ... ]
 }
@@ -108,7 +99,6 @@ jacoco-filter path/to/jacoco.xml --summary --output gaps.json
 
 - **score** — `complexity × (missed_lines / total_lines)`. Higher = write tests here first.
 - **missed_lines** — exact line numbers with no coverage. Target these in your tests.
-- **by_class** — sorted ascending by `line_coverage_pct` (worst-covered classes first).
 
 ---
 
@@ -161,9 +151,6 @@ jacoco-filter jacoco.xml --summary | jq '.summary.line_coverage_pct'
 
 # Check against a threshold (exits 0 if met, 1 if not)
 jacoco-filter jacoco.xml --summary | jq 'if .summary.line_coverage_pct >= 80 then "PASS" else "FAIL" end'
-
-# Worst-covered classes (already sorted ascending in output)
-jacoco-filter jacoco.xml --summary | jq '.summary.by_class | .[0:5] | [.[] | {class, line_coverage_pct}]'
 ```
 
 ### Work with the methods array

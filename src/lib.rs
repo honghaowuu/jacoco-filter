@@ -3,7 +3,7 @@ pub mod model;
 pub mod parser;
 pub mod scorer;
 
-use model::{ClassCoverage, CoverageSummary, FilteredMethod, Report};
+use model::{CoverageSummary, FilteredMethod, Report};
 
 /// Parse the JaCoCo XML, filter trivial/fully-covered methods, score the
 /// remainder, drop entries below `min_score`, and return sorted by score desc.
@@ -46,30 +46,16 @@ pub fn process(xml: &str, min_score: f64) -> Result<Vec<FilteredMethod>, Box<dyn
 fn summarize(classes: &[model::ParsedClass]) -> CoverageSummary {
     let mut total_covered: u32 = 0;
     let mut total_missed: u32 = 0;
-    let mut by_class: Vec<ClassCoverage> = Vec::new();
 
     for class in classes {
-        let covered = class.line_covered;
-        let missed = class.line_missed;
-        let pct = pct(covered, missed);
-        by_class.push(ClassCoverage {
-            class: class.class_name.clone(),
-            source_file: class.source_file.clone(),
-            line_coverage_pct: pct,
-            lines_covered: covered,
-            lines_missed: missed,
-        });
-        total_covered += covered;
-        total_missed += missed;
+        total_covered += class.line_covered;
+        total_missed += class.line_missed;
     }
-
-    by_class.sort_by(|a, b| a.line_coverage_pct.partial_cmp(&b.line_coverage_pct).unwrap_or(std::cmp::Ordering::Equal));
 
     CoverageSummary {
         line_coverage_pct: pct(total_covered, total_missed),
         lines_covered: total_covered,
         lines_missed: total_missed,
-        by_class,
     }
 }
 

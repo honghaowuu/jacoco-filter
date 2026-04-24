@@ -7,7 +7,7 @@ A fast, cross-platform CLI tool that parses JaCoCo XML coverage reports, filters
 - Filters constructors, getters, and setters automatically
 - Skips fully-covered methods (no missed lines)
 - Scores each method: `complexity × (missed_lines / total_lines)`
-- Reports overall and per-class line coverage percentage (`--summary`)
+- Reports overall line coverage percentage (`--summary`)
 - Outputs compact or pretty-printed JSON
 - Limits output to the top-k highest-scoring methods (`--top-k`, default 5)
 - Supports a minimum score threshold to focus on high-priority gaps
@@ -112,22 +112,13 @@ Wraps the methods array in an object with a coverage summary:
   "summary": {
     "line_coverage_pct": 72.4,
     "lines_covered": 842,
-    "lines_missed": 321,
-    "by_class": [
-      {
-        "class": "com.example.billing.InvoiceService",
-        "source_file": "InvoiceService.java",
-        "line_coverage_pct": 45.0,
-        "lines_covered": 9,
-        "lines_missed": 11
-      }
-    ]
+    "lines_missed": 321
   },
   "methods": [ ... ]
 }
 ```
 
-`by_class` is sorted ascending by `line_coverage_pct` (worst-covered first). Use `jq` to pull out just the number you need:
+Use `jq` to pull out just the number you need:
 
 ```bash
 # Overall coverage percentage
@@ -135,9 +126,6 @@ jacoco-filter jacoco.xml --summary | jq '.summary.line_coverage_pct'
 
 # Pass/fail against an 80% target
 jacoco-filter jacoco.xml --summary | jq 'if .summary.line_coverage_pct >= 80 then "PASS" else "FAIL" end'
-
-# Five worst-covered classes
-jacoco-filter jacoco.xml --summary | jq '.summary.by_class[:5] | [.[] | {class, line_coverage_pct}]'
 ```
 
 ## CLI Reference
